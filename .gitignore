@@ -6,6 +6,7 @@ Favorfit_image_to_text/
 Favorfit_color_enhancement/
 postprocess_remove_bg/
 *.pth
+flagged/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

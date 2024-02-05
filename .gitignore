@@ -1,3 +1,12 @@
+Favorfit_diffusion/
+Favorfit_super_resolution/
+Favorfit_remove_bg/
+Favorfit_recommend_template/
+Favorfit_image_to_text/
+Favorfit_color_enhancement/
+postprocess_remove_bg/
+*.pth
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

@@ -18,6 +18,10 @@ model_storage = {
                         "encoder":None, 
                         "decoder":None, 
                         "diffusion":None,},
+    "diffusion_models_inpaint":{"clip":None,
+                        "encoder":None, 
+                        "decoder":None, 
+                        "diffusion":None,},
 }
 
 
@@ -49,7 +53,7 @@ def outpaint():
 
 # Composition
 def composition():
-    model_storage["diffusion_models"].update(model_storage["controlnet_canny"])
+    model_storage["diffusion_models_inpaint"].update(model_storage["controlnet_canny"])
 
     input_image = Image.open("./inference_test_image/object_with_template.png").convert("RGB")
     control_image = Image.open("./inference_test_image/object_with_template_canny.png").convert("RGB")
@@ -66,14 +70,14 @@ def composition():
         strength=0.6,
         lora_scale=0.7,
         controlnet_scale=1.0,
-        models=model_storage["diffusion_models"],
+        models=model_storage["diffusion_models_inpaint"],
         seeds=-1,
         device="cuda",
         tokenizer=model_storage["tokenizer"]
     )
 
-    model_storage["diffusion_models"].pop("controlnet")
-    model_storage["diffusion_models"].pop("controlnet_embedding")
+    model_storage["diffusion_models_inpaint"].pop("controlnet")
+    model_storage["diffusion_models_inpaint"].pop("controlnet_embedding")
 
     return result
 
@@ -136,6 +140,10 @@ def prepare_diffusion_models(root_model_dir):
     model_storage["tokenizer"] = call_tokenizer()
     model_storage["diffusion_models"] = call_diffusion_model(
         diffusion_state_dict_path=os.path.join(root_model_dir, "favorfit_base.pth"),
+        lora_state_dict_path=os.path.join(root_model_dir, "lora/favorfit_lora.pth"),
+    )
+    model_storage["diffusion_models_inpaint"] = call_diffusion_model(
+        diffusion_state_dict_path=os.path.join(root_model_dir, "favorfit_inpaint.pth"),
         lora_state_dict_path=os.path.join(root_model_dir, "lora/favorfit_lora.pth"),
     )
     model_storage["controlnet_shuffle"] = call_controlnet_model(os.path.join(root_model_dir, "controlnet/shuffle.pth"))

@@ -7,7 +7,7 @@ from model_api import *
 
 app = Flask(__name__)
 request_queue = Queue()
-response_queue = Queue()
+response_dict = {}
 lock = threading.Lock()
 
 def queue_process():
@@ -16,13 +16,17 @@ def queue_process():
 
         if data is None:
             break
-
+        
+        # try:
+        request_id = data.get("request_id")
         process_function = data.get("process_function")
         result = process_function(**data.get("params"))
-        result["request_id"] = data.get("request_id")
+        result["request_id"] = request_id
+        # except Exception as e:
+        #     result = {"error":str(e), "request_id":data.get("request_id")}
 
         with lock:
-            response_queue.put(result)
+            response_dict[data.get("request_id")] = result
 
         request_queue.task_done()
 
@@ -48,48 +52,55 @@ def call_main():
     return 'Hello, This is Favorfit Back Office backend'
 
 
-@app.route('/get_result/', methods=['GET'])
+@app.route('/get_result/', methods=['POST'])
 def get_result():
     try:
-        result_data = response_queue.get(block=False)
-        return respond(None, result_data)
-    except Empty:
-        return respond(None, {"state":"Empty resoponse queue", "request_qsize":request_queue.qsize()})
+        data = request.get_json()
+        args = load_instance_from_json(data)
+        result_data = response_dict.get(args["request_id"])
+        response_dict.pop(args["request_id"])
+
+        return respond(result_data.get("error"), result_data)
+    except KeyError:
+        return respond("Request ID Error", {"state":"request id dose not exist", "request_qsize":request_queue.qsize(), "response_dict_size":len(response_dict)})
 
 
 @app.route('/utils/remove_bg/', methods=["POST"])
 def remove_bg_api():
+    # try:
     data = request.get_json()
     args = load_instance_from_json(data)
 
     img_bs64 = args["image_b64"]
     img_pil = bs64_to_pil(img_bs64)
     
-    enqueue_request({"process_function":remove_bg, 
-                     "request_id":args.get("request_id",None),
-                     "params":{
-                         "img_pil":img_pil,
-                         "post_process":args.get("post_process",False),
-                         "return_dict":True,
-                        }})
-    
-    return respond(None, {"state":"queued", "type":"remove_bg", "request_qsize":request_queue.qsize()})
+    result_json = remove_bg(img_pil=img_pil, 
+                            post_process=args.get("post_process",False), 
+                            return_dict=True)
+    # except Exception as e:
+    #     return respond(e, {"error":str(e)})
+    return respond(None, result_json)
 
 
 @app.route('/utils/remove_bg/postprocess/', methods=["POST"])
 def mask_post_process_api():
+    # try:
     data = request.get_json()
     args = load_instance_from_json(data)
 
     mask_bs64 = args["mask_b64"]
     mask_pil = bs64_to_pil(mask_bs64)
 
-    result_dict = mask_post_process(mask_pil=mask_pil, return_dict=True)
+    result_dict = mask_post_process(mask_pil=mask_pil, 
+                                    return_dict=True)
+    # except Exception as e:
+    #     return respond(e, {"error":str(e)})
     return respond(None, result_dict)
 
 
 @app.route('/utils/recommend_colors/', methods=["POST"])
 def recommend_colors_api():
+    # try:
     data = request.get_json()
     args = load_instance_from_json(data)
 
@@ -102,19 +113,17 @@ def recommend_colors_api():
     else:
         mask_pil=None
 
-    enqueue_request({"process_function":recommend_colors, 
-                     "request_id":args.get("request_id",None),
-                     "params":{
-                         "img_pil":img_pil,
-                         "mask_pil":mask_pil,
-                         "return_dict":True,
-                         }})
-
-    return respond(None, {"state":"queued", "type":"recommend_colors", "request_qsize":request_queue.qsize()})
+    result_dict = recommend_colors(img_pil=img_pil,
+                                mask_pil=mask_pil,
+                                return_dict=True)
+    # except Exception as e:
+    #     return respond(e, {"error":str(e)})
+    return respond(None, result_dict)
 
 
 @app.route('/utils/color_enhancement/', methods=["POST"])
 def color_enhancement_api():
+    # try:
     data = request.get_json()
     args = load_instance_from_json(data)
 
@@ -124,103 +133,120 @@ def color_enhancement_api():
     if args.get("gamma") is not None:
         gamma = args["gamma"]
     else:
-        gamma = None
+        gamma = 0.75
     
     if args.get("factor") is not None:
         factor = args["factor"]
     else:
-        factor = None
+        factor = 1.7
     
-    enqueue_request({"process_function":color_enhancement, 
-                     "request_id":args.get("request_id",None),
-                     "params":{
-                         "img_pil":img_pil,
-                         "gamma":gamma,
-                         "factor":factor,
-                         "return_dict":True,
-                         }})
-    
-    return respond(None, {"state":"queued", "type":"color_enhancement", "request_qsize":request_queue.qsize()})
+    result_dict = color_enhancement(img_pil=img_pil,
+                                    gamma=gamma,
+                                    factor=factor,
+                                    return_dict=True)
+    # except Exception as e:
+    #     return respond(e, {"error":str(e)})
+    return respond(None, result_dict)
 
 
 @app.route('/utils/text_to_image/blip/', methods=["POST"])
 def text_to_image_blip_api():
+    # try:
     data = request.get_json()
     args = load_instance_from_json(data)
 
     img_bs64 = args["image_b64"]
     img_pil = bs64_to_pil(img_bs64)
 
-    enqueue_request({"process_function":text_to_image_blip, 
-                     "request_id":args.get("request_id",None),
-                     "params":{
-                         "img_pil":img_pil,
-                         "return_dict":True,
-                         }})
-
-    return respond(None, {"state":"queued", "type":"blip", "request_qsize":request_queue.qsize()})
+    result_dict = text_to_image_blip(img_pil=img_pil,
+                                    return_dict=True)
+    # except Exception as e:
+    #     return respond(e, {"error":str(e)})
+    return respond(None, result_dict)
 
 
 @app.route('/utils/text_to_image/clip/', methods=["POST"])
 def text_to_image_clip_api():
+    # try:
     data = request.get_json()
     args = load_instance_from_json(data)
 
     img_bs64 = args["image_b64"]
     img_pil = bs64_to_pil(img_bs64)
 
-    enqueue_request({"process_function":text_to_image_clip, 
-                     "request_id":args.get("request_id",None),
-                     "params":{
-                         "img_pil":img_pil,
-                         "return_dict":True,
-                         }})
-
-    return respond(None, {"state":"queued", "type":"clip", "request_qsize":request_queue.qsize()})
+    result_dict = text_to_image_clip(img_pil=img_pil,
+                                    return_dict=True)
+    # except Exception as e:
+    #     return respond(e, {"error":str(e)})
+    return respond(None, result_dict)
 
 
 @app.route('/utils/super_resolution/', methods=["POST"])
 def super_resolution_api():
+    # try:
     data = request.get_json()
     args = load_instance_from_json(data)
 
+    request_id = args["request_id"]
+
+    if request_id in response_dict.keys():
+        return respond("dupled request id", {"state":"dupled request id", "type":"super_resolution", "request_qsize":request_queue.qsize()})
+    
     img_bs64 = args["image_b64"]
     img_pil = bs64_to_pil(img_bs64)
 
     enqueue_request({"process_function":super_resolution, 
-                     "request_id":args.get("request_id",None),
-                     "params":{
-                         "img_pil":img_pil,
-                         "return_dict":True,
-                         }})
-    
+                    "request_id":request_id,
+                    "params":{
+                        "img_pil":img_pil,
+                        "return_dict":True,
+                        }})
+    # except Exception as e:
+    #     return respond(e, {"error":str(e)})
     return respond(None, {"state":"queued", "type":"super_resolution", "request_qsize":request_queue.qsize()})
 
     
 @app.route('/diffusion/outpaint/', methods=["POST"])
 def outpaint_api():
+    # try:
     data = request.get_json()
     args = load_instance_from_json(data)
 
+    request_id = args["request_id"]
+
+    if request_id in response_dict.keys():
+        return respond("dupled request id", {"state":"dupled request id", "type":"outpaint", "request_qsize":request_queue.qsize()})
+    
     img_bs64 = args["image_b64"]
     img_pil = bs64_to_pil(img_bs64)
 
+    mask_bs64 = args["mask_b64"]
+    mask_pil = bs64_to_pil(mask_bs64)
+
     enqueue_request({"process_function":outpaint, 
-                     "request_id":args.get("request_id",None),
-                     "params":{
-                         "img_pil":img_pil,
-                         "num_per_image":args.get("num_per_image", 1),
-                         "return_dict":True,
-                         }})
-    
+                    "request_id":request_id,
+                    "params":{
+                        "img_pil":img_pil,
+                        "mask_pil":mask_pil,
+                        "num_per_image":args.get("num_per_image", 1),
+                        "return_dict":True,
+                        }})
+    # except Exception as e:
+    #     return respond(e, {"error":str(e)})
     return respond(None, {"state":"queued", "type":"outpaint", "request_qsize":request_queue.qsize()})
 
 
 @app.route('/diffusion/composition/', methods=["POST"])
 def composition_api():
+    # try:
     data = request.get_json()
     args = load_instance_from_json(data)
 
+    request_id = args["request_id"]
+
+    if request_id in response_dict.keys():
+        return respond("dupled request id", {"state":"dupled request id", "type":"composition", "request_qsize":request_queue.qsize()})
+    
     img_bs64 = args["image_b64"]
     img_pil = bs64_to_pil(img_bs64)
 
@@ -228,22 +254,29 @@ def composition_api():
     mask_pil = bs64_to_pil(mask_bs64)
 
     enqueue_request({"process_function":composition, 
-                     "request_id":args.get("request_id",None),
-                     "params":{
-                         "img_pil":img_pil,
-                         "mask_pil":mask_pil,
-                         "num_per_image":args.get("num_per_image", 1),
-                         "return_dict":True,
-                         }})
-
+                    "request_id":request_id,
+                    "params":{
+                        "img_pil":img_pil,
+                        "mask_pil":mask_pil,
+                        "num_per_image":args.get("num_per_image", 1),
+                        "return_dict":True,
+                        }})
+    # except Exception as e:
+    #     return respond(e, {"error":str(e)})
     return respond(None, {"state":"queued", "type":"composition", "request_qsize":request_queue.qsize()})
 
     
 @app.route('/diffusion/augmentation/style/', methods=["POST"])
 def augmentation_base_style_api():
+    # try:
     data = request.get_json()
     args = load_instance_from_json(data)
 
+    request_id = args["request_id"]
+
+    if request_id in response_dict.keys():
+        return respond("dupled request id", {"state":"dupled request id", "type":"augmentation_style", "request_qsize":request_queue.qsize()})
+    
     img_base_bs64 = args["image_b64_base"]
     img_base_pil = bs64_to_pil(img_base_bs64)
 
@@ -251,22 +284,29 @@ def augmentation_base_style_api():
     img_style_pil = bs64_to_pil(img_style_bs64)
 
     enqueue_request({"process_function":augmentation_base_style, 
-                     "request_id":args.get("request_id",None),
-                     "params":{
-                         "img_base_pil":img_base_pil,
-                         "img_style_pil":img_style_pil,
-                         "num_per_image":args.get("num_per_image", 1),
-                         "return_dict":True,
-                         }})
-
+                    "request_id":request_id,
+                    "params":{
+                        "img_base_pil":img_base_pil,
+                        "img_style_pil":img_style_pil,
+                        "num_per_image":args.get("num_per_image", 1),
+                        "return_dict":True,
+                        }})
+    # except Exception as e:
+    #     return respond(e, {"error":str(e)})
     return respond(None, {"state":"queued", "type":"augmentation_style", "request_qsize":request_queue.qsize()})
 
 
 @app.route('/diffusion/augmentation/text/', methods=["POST"])
 def augmentation_base_text_api():
+    # try:
     data = request.get_json()
     args = load_instance_from_json(data)
 
+    request_id = args["request_id"]
+
+    if request_id in response_dict.keys():
+        return respond("dupled request id", {"state":"dupled request id", "type":"augmentation_text", "request_qsize":request_queue.qsize()})
+    
     img_bs64 = args["image_b64"]
     img_pil = bs64_to_pil(img_bs64)
 
@@ -274,15 +314,16 @@ def augmentation_base_text_api():
     concept = args["concept"]
 
     enqueue_request({"process_function":augmentation_base_text, 
-                     "request_id":args.get("request_id",None),
-                     "params":{
-                         "img_pil":img_pil,
-                         "color":color,
-                         "concept":concept,
-                         "num_per_image":args.get("num_per_image", 1),
-                         "return_dict":True,
-                         }})
-
+                    "request_id":request_id,
+                    "params":{
+                        "img_pil":img_pil,
+                        "color":color,
+                        "concept":concept,
+                        "num_per_image":args.get("num_per_image", 1),
+                        "return_dict":True,
+                        }})
+    # except Exception as e:
+    #     return respond(e, {"error":str(e)})
     return respond(None, {"state":"queued", "type":"augmentation_text", "request_qsize":request_queue.qsize()})
 
 
@@ -320,6 +361,6 @@ if __name__ == '__main__':
     args = parse_args()
     
     set_root_model_path(root_model_dir_path=args.root_model_path, root_model_diffusion_dir_path=args.root_model_diffusion_path)
-    prepare_diffusion_models()
+    prepare_ai_models()
 
     app.run(host=args.host, debug=args.debug, port=args.port)

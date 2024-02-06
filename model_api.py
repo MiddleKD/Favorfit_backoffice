@@ -21,6 +21,10 @@ model_storage = {
                         "encoder":None, 
                         "decoder":None, 
                         "diffusion":None,},
+    "diffusion_models_inpaint":{"clip":None,
+                        "encoder":None, 
+                        "decoder":None, 
+                        "diffusion":None,},
 }
 
 def set_root_model_path(root_model_dir_path, root_model_diffusion_dir_path):
@@ -28,11 +32,15 @@ def set_root_model_path(root_model_dir_path, root_model_diffusion_dir_path):
     root_model_dir = root_model_dir_path
     root_model_diffusion_dir = root_model_diffusion_dir_path
 
-def prepare_diffusion_models():
+def prepare_ai_models():
 
     model_storage["tokenizer"] = call_tokenizer()
     model_storage["diffusion_models"] = call_diffusion_model(
         diffusion_state_dict_path=os.path.join(root_model_diffusion_dir, "favorfit_base.pth"),
+        lora_state_dict_path=os.path.join(root_model_diffusion_dir, "lora/favorfit_lora.pth"),
+    )
+    model_storage["diffusion_models_inpaint"] = call_diffusion_model(
+        diffusion_state_dict_path=os.path.join(root_model_diffusion_dir, "favorfit_inpaint.pth"),
         lora_state_dict_path=os.path.join(root_model_diffusion_dir, "lora/favorfit_lora.pth"),
     )
     model_storage["controlnet_shuffle"] = call_controlnet_model(os.path.join(root_model_diffusion_dir, "controlnet/shuffle.pth"))
@@ -40,13 +48,15 @@ def prepare_diffusion_models():
     model_storage["controlnet_outpaint"] = call_controlnet_model(os.path.join(root_model_diffusion_dir, "controlnet/outpaint_v2.pth"))
     model_storage["controlnet_depth"] = call_controlnet_model(os.path.join(root_model_diffusion_dir, "controlnet/depth.pth"))
 
+    model_storage["remove_bg"] = model_remove_bg(os.path.join(root_model_dir, "remove_bg/remove_bg.pth"), device="cuda")
+    model_storage["blip"] = model_blip(os.path.join(root_model_dir, "image_to_text/blip/blip_large.pth"), device="cuda")
+    model_storage["clip"] = model_clip(os.path.join(root_model_dir, "image_to_text/clip"), device="cuda")
+    model_storage["super_resolution"] = model_super_resolution(os.path.join(root_model_dir, "super_resolution/super_resolution_x4.pth"), device="cuda")
+
 
 def remove_bg(img_pil, post_process=True, return_dict=False):
     torch.cuda.empty_cache()
-    if model_storage.get("remove_bg") is None:
-        model = model_remove_bg(os.path.join(root_model_dir, "remove_bg/remove_bg.pth"), device="cuda")
-    else:
-        model = model_storage["remove_bg"].to("cuda")
+    model = model_storage["remove_bg"].to("cuda")
     mask_pil = inference_remove_bg(img_pil, model)
     model_storage["remove_bg"] = model.to("cpu")
 
@@ -62,7 +72,7 @@ def mask_post_process(mask_pil, return_dict=False):
     model = MaskPostProcessor()
     mask_pil = model(mask_pil)
     if return_dict == True:
-        return {"type":"remove_bg", "image_b64": "data:application/octet-stream;base64," + pil_to_bs64(mask_pil)}
+        return {"type":"mask_post_process", "image_b64": "data:application/octet-stream;base64," + pil_to_bs64(mask_pil)}
     else:
         return mask_pil
 
@@ -78,16 +88,13 @@ def recommend_colors(img_pil, mask_pil=None, return_dict=False):
 def color_enhancement(img_pil, gamma=0.75, factor=1.7, return_dict=False):
     image_pil = inference_color_enhancement(img_pil, gamma, factor)
     if return_dict == True:
-        return {"type":"remove_bg", "image_b64": "data:application/octet-stream;base64," + pil_to_bs64(image_pil)}
+        return {"type":"color_enhancement", "image_b64": "data:application/octet-stream;base64," + pil_to_bs64(image_pil)}
     else:
         return image_pil
 
 def text_to_image_blip(img_pil, return_dict=False):
     torch.cuda.empty_cache()
-    if model_storage.get("blip") is None:
-        model = model_blip(os.path.join(root_model_dir, "image_to_text/blip/blip_large.pth"), device="cuda")
-    else:
-        model = model_storage["blip"].to("cuda")
+    model = model_storage["blip"].to("cuda")
 
     caption = inference_blip(img_pil, model)
     model_storage["blip"] = model.to("cpu")
@@ -99,10 +106,7 @@ def text_to_image_blip(img_pil, return_dict=False):
 
 def text_to_image_clip(img_pil, return_dict=False):
     torch.cuda.empty_cache()
-    if model_storage.get("clip") is None:
-        model = model_clip(os.path.join(root_model_dir, "image_to_text/clip"), device="cuda")
-    else:
-        model = model_storage["clip"].to("cuda")
+    model = model_storage["clip"].to("cuda")
 
     caption = inference_clip(img_pil, model)
     model_storage["clip"] = model.to("cpu")
@@ -114,10 +118,7 @@ def text_to_image_clip(img_pil, return_dict=False):
 
 def super_resolution(img_pil, return_dict=False):
     torch.cuda.empty_cache()
-    if model_storage.get("super_resolution") is None:
-        model = model_super_resolution(os.path.join(root_model_dir, "super_resolution/super_resolution_x4.pth"), device="cuda")
-    else:
-        model = model_storage["super_resolution"].to("cuda")
+    model = model_storage["super_resolution"].to("cuda")
 
     image_pil = inference_super_resolution(img_pil, model)
     model_storage["super_resolution"] = model.to("cpu")
@@ -128,10 +129,10 @@ def super_resolution(img_pil, return_dict=False):
         return image_pil
 
 
-def outpaint(img_pil, num_per_image, return_dict=False):
+def outpaint(img_pil, mask_pil, num_per_image, return_dict=False):
     torch.cuda.empty_cache()
     img_pil = resize_store_ratio(img_pil)
-    mask_pil = mask_post_process(remove_bg(img_pil))
+    mask_pil = resize_store_ratio(mask_pil)
     control_pil = make_outpaint_condition(img_pil, mask_pil)
     caption = text_to_image_blip(img_pil)
     
@@ -165,7 +166,7 @@ def composition(img_pil, mask_pil, num_per_image, return_dict=False):
     control_pil = make_canny_condition(img_pil)
     caption = text_to_image_clip(img_pil)
 
-    model_storage["diffusion_models"].update(model_storage["controlnet_canny"])
+    model_storage["diffusion_models_inpaint"].update(model_storage["controlnet_canny"])
 
     output_pils = inpainting_controlnet(
         input_image=img_pil,
@@ -177,14 +178,14 @@ def composition(img_pil, mask_pil, num_per_image, return_dict=False):
         strength=0.6,
         lora_scale=0.7,
         controlnet_scale=1.0,
-        models=model_storage["diffusion_models"],
+        models=model_storage["diffusion_models_inpaint"],
         seeds=-1,
         device="cuda",
         tokenizer=model_storage["tokenizer"]
     )
 
-    model_storage["diffusion_models"].pop("controlnet")
-    model_storage["diffusion_models"].pop("controlnet_embedding")
+    model_storage["diffusion_models_inpaint"].pop("controlnet")
+    model_storage["diffusion_models_inpaint"].pop("controlnet_embedding")
 
     if return_dict == True:
         return {"image_b64_list": ["data:application/octet-stream;base64," + pil_to_bs64(cur) for cur in output_pils]}

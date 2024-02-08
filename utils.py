@@ -23,6 +23,29 @@ def pil_to_bs64(img_pil):
     img_base64 = base64.b64encode(img_bytes).decode()
     return img_base64
 
+def img_box_crop(img_pil, box):
+    if isinstance(box, list):
+        x1, y1, x2, y2 = box
+    else:
+        x1 = box["x1"]; y1 = box["y1"]
+        x2 = box["x2"]; y2 = box["y2"]
+    
+    return img_pil.crop((x1, y1, x2, y2))
+
+def padding_mask_img(img_pil, mask_pil, box):
+    if box == None:
+        return mask_pil
+    
+    if isinstance(box, list):
+        x1, y1, x2, y2 = box
+    else:
+        x1 = box["x1"]; y1 = box["y1"]
+        x2 = box["x2"]; y2 = box["y2"]
+    
+    black_img = Image.new("RGB", img_pil.size)
+    black_img.paste(mask_pil, (x1, y1, x2, y2))
+    return black_img
+
 def load_instance_from_json(json_like):
     args = json_like["body"]
     if isinstance(args, str):

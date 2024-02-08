@@ -48,21 +48,29 @@ def prepare_ai_models():
     model_storage["controlnet_outpaint"] = call_controlnet_model(os.path.join(root_model_diffusion_dir, "controlnet/outpaint_v2.pth"))
     model_storage["controlnet_depth"] = call_controlnet_model(os.path.join(root_model_diffusion_dir, "controlnet/depth.pth"))
 
-    model_storage["remove_bg"] = model_remove_bg(os.path.join(root_model_dir, "remove_bg/remove_bg.pth"), device="cuda")
+    model_storage["remove_bg"] = model_remove_bg(os.path.join(root_model_dir, "remove_bg/remove_bg.pth"), device="cpu")
     model_storage["blip"] = model_blip(os.path.join(root_model_dir, "image_to_text/blip/blip_large.pth"), device="cuda")
     model_storage["clip"] = model_clip(os.path.join(root_model_dir, "image_to_text/clip"), device="cuda")
     model_storage["super_resolution"] = model_super_resolution(os.path.join(root_model_dir, "super_resolution/super_resolution_x4.pth"), device="cuda")
 
 
-def remove_bg(img_pil, post_process=True, return_dict=False):
+def remove_bg(img_pil, post_process=True, box=None, return_dict=False):
     torch.cuda.empty_cache()
-    model = model_storage["remove_bg"].to("cuda")
-    mask_pil = inference_remove_bg(img_pil, model)
-    model_storage["remove_bg"] = model.to("cpu")
+
+    if box is not None:
+        img_pil_cropped = img_box_crop(img_pil, box)
+    else:
+        img_pil_cropped = img_pil
+    
+    model = model_storage["remove_bg"].to("cpu")
+    mask_pil = inference_remove_bg(img_pil_cropped, model)
+    # model_storage["remove_bg"] = model.to("cpu")
 
     if post_process == True:
         mask_pil = mask_post_process(mask_pil)
-
+    if box is not None:
+        mask_pil = padding_mask_img(img_pil=img_pil, mask_pil=mask_pil, box=box)
+    
     if return_dict == True:
         return {"type":"remove_bg", "image_b64": "data:application/octet-stream;base64," + pil_to_bs64(mask_pil)}
     else:

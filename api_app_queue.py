@@ -23,7 +23,7 @@ def queue_process():
             result = process_function(**data.get("params"))
             result["request_id"] = request_id
         except Exception as e:
-            result = {"error":str(e), "request_id":data.get("request_id")}
+            result = {"state": "error"+str(e)}
 
         with lock:
             response_dict[data.get("request_id")] = result
@@ -79,7 +79,7 @@ def remove_bg_api():
                                 box=args.get("box",None),
                                 return_dict=True)
     except Exception as e:
-        return respond(e, {"error":str(e)})
+        return respond(e, {"state": "error"+str(e)})
     return respond(None, result_json)
 
 
@@ -95,7 +95,7 @@ def mask_post_process_api():
         result_dict = mask_post_process(mask_pil=mask_pil, 
                                         return_dict=True)
     except Exception as e:
-        return respond(e, {"error":str(e)})
+        return respond(e, {"state": "error"+str(e)})
     return respond(None, result_dict)
 
 
@@ -118,7 +118,7 @@ def recommend_colors_api():
                                     mask_pil=mask_pil,
                                     return_dict=True)
     except Exception as e:
-        return respond(e, {"error":str(e)})
+        return respond(e, {"state": "error"+str(e)})
     return respond(None, result_dict)
 
 
@@ -146,7 +146,7 @@ def color_enhancement_api():
                                         factor=factor,
                                         return_dict=True)
     except Exception as e:
-        return respond(e, {"error":str(e)})
+        return respond(e, {"state": "error"+str(e)})
     return respond(None, result_dict)
 
 
@@ -162,7 +162,7 @@ def text_to_image_blip_api():
         result_dict = text_to_image_blip(img_pil=img_pil,
                                         return_dict=True)
     except Exception as e:
-        return respond(e, {"error":str(e)})
+        return respond(e, {"state": "error"+str(e)})
     return respond(None, result_dict)
 
 
@@ -178,7 +178,7 @@ def text_to_image_clip_api():
         result_dict = text_to_image_clip(img_pil=img_pil,
                                         return_dict=True)
     except Exception as e:
-        return respond(e, {"error":str(e)})
+        return respond(e, {"state": "error"+str(e)})
     return respond(None, result_dict)
 
 
@@ -203,7 +203,7 @@ def super_resolution_api():
                             "return_dict":True,
                             }})
     except Exception as e:
-        return respond(e, {"error":str(e)})
+        return respond(e, {"state": "error"+str(e)})
     return respond(None, {"state":"queued", "type":"super_resolution", "request_qsize":request_queue.qsize()})
 
     
@@ -233,7 +233,7 @@ def outpaint_api():
                             "return_dict":True,
                             }})
     except Exception as e:
-        return respond(e, {"error":str(e)})
+        return respond(e, {"state": "error"+str(e)})
     return respond(None, {"state":"queued", "type":"outpaint", "request_qsize":request_queue.qsize()})
 
 
@@ -263,7 +263,7 @@ def composition_api():
                             "return_dict":True,
                             }})
     except Exception as e:
-        return respond(e, {"error":str(e)})
+        return respond(e, {"state": "error"+str(e)})
     return respond(None, {"state":"queued", "type":"composition", "request_qsize":request_queue.qsize()})
 
     
@@ -293,7 +293,7 @@ def augmentation_base_style_api():
                             "return_dict":True,
                             }})
     except Exception as e:
-        return respond(e, {"error":str(e)})
+        return respond(e, {"state": "error"+str(e)})
     return respond(None, {"state":"queued", "type":"augmentation_style", "request_qsize":request_queue.qsize()})
 
 
@@ -311,8 +311,8 @@ def augmentation_base_text_api():
         img_bs64 = args["image_b64"]
         img_pil = bs64_to_pil(img_bs64)
 
-        color = args["color"]
-        concept = args["concept"]
+        color = args.get("color", "")
+        concept = args.get("concept", "")
 
         enqueue_request({"process_function":augmentation_base_text, 
                         "request_id":request_id,
@@ -324,7 +324,7 @@ def augmentation_base_text_api():
                             "return_dict":True,
                             }})
     except Exception as e:
-        return respond(e, {"error":str(e)})
+        return respond(e, {"state": "error"+str(e)})
     return respond(None, {"state":"queued", "type":"augmentation_text", "request_qsize":request_queue.qsize()})
 
 

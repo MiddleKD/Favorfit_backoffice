@@ -35,3 +35,8 @@
   ```python
   python3 api_app.py
   ``` 
+
+## Need to know
+- `clip-interrogator==0.6.0`과 `torch==1.9.1`에 버전 충돌이 있습니다.
+  - clip-interrogator파일에서 backend.mps 문구가 들어가는 부분을 삭제하면 됩니다.
+  - backend.mps를 `torch 1.9.1`에서 지원 안 해서 생기는 문제입니다.

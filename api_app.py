@@ -16,12 +16,16 @@ def enqueue_request(data):
 
 from utils import TooMuchRequestQueueError
 request_queue_max_len = None
-def check_request_queue_length(max_len=request_queue_max_len):
+def check_request_queue_length(max_len=None):
+    if max_len is None:
+        max_len = response_dict_max_len
     if request_queue.qsize() > max_len:
         raise TooMuchRequestQueueError("try again in a few minutes")
 
 response_dict_max_len = None
-def cleanup_response_dict(max_len=response_dict_max_len):
+def cleanup_response_dict(max_len=None):
+    if max_len is None:
+        max_len = response_dict_max_len
     if len(response_dict) > max_len:
         print(f"WARNINIG: Response dict length is over max_len({max_len}), response dict will be cleaned up!")
         with lock:

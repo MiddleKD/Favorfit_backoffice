@@ -1,5 +1,5 @@
-torch==2.1.0
-torchvision==0.16.0
+torch==1.9.1
+torchvision==0.10.1
 pandas==2.0.3
 transformers==4.30.2
 accelerate==0.21.0

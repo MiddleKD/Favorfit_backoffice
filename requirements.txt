@@ -2,7 +2,7 @@ torch==1.9.1
 torchvision==0.10.1
 pandas==2.0.3
 transformers==4.30.2
-accelerate==0.21.0
+accelerate
 datasets==2.15.0
 matplotlib==3.3.4
 opencv-python==4.8.1.78

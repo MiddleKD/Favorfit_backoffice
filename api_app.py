@@ -15,11 +15,13 @@ def enqueue_request(data):
         request_queue.put(data)
 
 from utils import TooMuchRequestQueueError
-def check_request_queue_length(max_len=10):
-    if len(request_queue) > max_len:
+request_queue_max_len = None
+def check_request_queue_length(max_len=request_queue_max_len):
+    if request_queue.qsize() > max_len:
         raise TooMuchRequestQueueError("try again in a few minutes")
 
-def cleanup_response_dict(max_len=10):
+response_dict_max_len = None
+def cleanup_response_dict(max_len=response_dict_max_len):
     if len(response_dict) > max_len:
         print(f"WARNINIG: Response dict length is over max_len({max_len}), response dict will be cleaned up!")
         with lock:
@@ -378,12 +380,25 @@ def parse_args():
         type=int,
         default=8000,
     )
+    parser.add_argument(
+        "--request_queue_max_len",
+        type=int,
+        default=10,
+    )
+    parser.add_argument(
+        "--response_dict_max_len",
+        type=int,
+        default=10,
+    )
     args = parser.parse_args()
     return args
 
 if __name__ == '__main__':
     args = parse_args()
-    
+
+    request_queue_max_len = args.request_queue_max_len
+    response_dict_max_len = args.response_dict_max_len
+
     set_root_model_path(root_model_dir_path=args.root_model_path, root_model_diffusion_dir_path=args.root_model_diffusion_path)
     prepare_ai_models()
 

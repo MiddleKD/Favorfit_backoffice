@@ -70,7 +70,7 @@ def center_crop_and_resize(input_path, target_size=(512, 512)):
     bottom = (height + min(width, height)) // 2
     image = image.crop((left, top, right, bottom))
 
-    image = image.resize(target_size, Image.ANTIALIAS)
+    image = image.resize(target_size)
 
     return image
 
@@ -133,6 +133,6 @@ def resize_store_ratio(image, min_side=512):
         new_width = int((width / height) * min_side)
         new_height = min_side
 
-    resized_image = image.resize((new_width, new_height), Image.ANTIALIAS)
+    resized_image = image.resize((new_width, new_height))
 
     return resized_image

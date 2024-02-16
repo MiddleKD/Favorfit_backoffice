@@ -4,8 +4,10 @@ pandas==2.0.3
 transformers==4.30.2
 accelerate==0.21.0
 datasets==2.15.0
-matplotlib==3.3.4
+matplotlib==3.8.3
 opencv-python==4.8.1.78
 colorthief==0.2.1
 clip-interrogator==0.6.0
 Flask==3.0.2
+kornia==0.6.7
+fairscale==0.4.4

@@ -22,3 +22,16 @@
   git clone https://github.com/MiddleKD/postprocess_remove_bg.git
   ```
 
+## Run server
+- RUNNING
+- args
+  - `root_model_path`: Model parent path
+  - `root_model_diffusion_path`: Diffusion model path in parent
+  - `host`: HOST ex:0.0.0.0
+  - `debug`: debug mode on off(bool)
+  - `port`: PORT ex:8000
+  - `request_queue_max_len`: request_queue max length. if you exceed this queue length. It will return `TooMuchRequestQueueError`
+  - `response_dict_max_len`: response_dict max length. if you exceed this dict length. It will clear response dict
+  ```python
+  python3 api_app.py
+  ``` 

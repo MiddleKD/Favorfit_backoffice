@@ -5,6 +5,14 @@ from PIL import Image
 import cv2
 import numpy as np
 
+class TooMuchRequestQueueError(Exception):
+    def __init__(self, message=None):
+        self.message = message
+        super().__init__(self.message)
+        
+    def __str__(self):
+        return f"TooMuchRequestQueueError: {self.message}"
+
 def respond(err, res):
     respond_msg = {'statusCode': 502 if err is not None else 200, 'body': json.dumps(res)}
     return respond_msg

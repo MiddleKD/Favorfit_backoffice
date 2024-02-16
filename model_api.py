@@ -46,7 +46,7 @@ def prepare_ai_models():
     model_storage["controlnet_shuffle"] = call_controlnet_model(os.path.join(root_model_diffusion_dir, "controlnet/shuffle.pth"))
     model_storage["controlnet_canny"] = call_controlnet_model(os.path.join(root_model_diffusion_dir, "controlnet/canny.pth"))
     model_storage["controlnet_outpaint"] = call_controlnet_model(os.path.join(root_model_diffusion_dir, "controlnet/outpaint_v2.pth"))
-    model_storage["controlnet_depth"] = call_controlnet_model(os.path.join(root_model_diffusion_dir, "controlnet/depth.pth"))
+    # model_storage["controlnet_depth"] = call_controlnet_model(os.path.join(root_model_diffusion_dir, "controlnet/depth.pth"))
 
     model_storage["remove_bg"] = model_remove_bg(os.path.join(root_model_dir, "remove_bg/remove_bg.pth"), device="cpu")
     model_storage["blip"] = model_blip(os.path.join(root_model_dir, "image_to_text/blip/blip_large.pth"), device="cuda")

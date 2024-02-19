@@ -60,9 +60,8 @@ def load_instance_from_json(json_like):
         args = json_like.loads(args)
     return args
 
-def center_crop_and_resize(input_path, target_size=(512, 512)):
-    image = Image.open(input_path)
-
+def center_crop_and_resize(input_image, target_size=(512, 512)):
+    image = input_image
     width, height = image.size
     left = (width - min(width, height)) // 2
     top = (height - min(width, height)) // 2

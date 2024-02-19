@@ -1,5 +1,5 @@
 from Favorfit_diffusion.inference import call_tokenizer, call_diffusion_model, call_controlnet_model, make_multi_controlnet_model,\
-    text_to_image_controlnet, inpainting_controlnet
+    text_to_image_controlnet, inpainting_controlnet, text_to_image_positive_controlnet
 from Favorfit_remove_bg.inference import call_model as model_remove_bg, inference as inference_remove_bg
 from Favorfit_recommend_template.inference import inference as inference_recommend_color
 from Favorfit_image_to_text.blip_image_to_text import load_interrogator as model_blip, inference as inference_blip
@@ -40,10 +40,10 @@ def prepare_ai_models():
         lora_state_dict_path=os.path.join(root_model_diffusion_dir, "lora/favorfit_lora.pth"),
     )
     model_storage["diffusion_models_inpaint"] = call_diffusion_model(
-        diffusion_state_dict_path=os.path.join(root_model_diffusion_dir, "favorfit_inpaint.pth"),
+        diffusion_state_dict_path=os.path.join(root_model_diffusion_dir, "favorfit_inpaint_ver1.2.pth"),
         lora_state_dict_path=os.path.join(root_model_diffusion_dir, "lora/favorfit_lora.pth"),
     )
-    model_storage["controlnet_shuffle"] = call_controlnet_model(os.path.join(root_model_diffusion_dir, "controlnet/shuffle.pth"))
+    model_storage["controlnet_shuffle"] = call_controlnet_model(os.path.join(root_model_diffusion_dir, "controlnet/shuffle.pth"), apply_global_mean_pooling_per_models=True)
     model_storage["controlnet_canny"] = call_controlnet_model(os.path.join(root_model_diffusion_dir, "controlnet/canny.pth"))
     model_storage["controlnet_outpaint"] = call_controlnet_model(os.path.join(root_model_diffusion_dir, "controlnet/outpaint_v2.pth"))
     # model_storage["controlnet_depth"] = call_controlnet_model(os.path.join(root_model_diffusion_dir, "controlnet/depth.pth"))
@@ -142,25 +142,29 @@ def outpaint(img_pil, mask_pil, num_per_image, return_dict=False):
     img_pil = resize_store_ratio(img_pil)
     mask_pil = resize_store_ratio(mask_pil)
     control_pil = make_outpaint_condition(img_pil, mask_pil)
+    reversed_mask_pil = Image.fromarray(255 - np.array(mask_pil))
     caption = text_to_image_blip(img_pil)
     
-    model_storage["diffusion_models"].update(model_storage["controlnet_outpaint"])
+    model_storage["diffusion_models_inpaint"].update(model_storage["controlnet_outpaint"])
 
-    output_pils = text_to_image_controlnet(
+    output_pils = inpainting_controlnet(
+        input_image=img_pil,
+        mask_image=reversed_mask_pil,
         control_image=control_pil,
-        prompt=f"professional photography, natural shadow, {caption}, realistic, high resolution, 8k",
+        prompt=f"professional photography, natural, {caption}, realistic, high resolution, 8k",
         uncond_prompt="low quality, worst quality, wrinkled, deformed, distorted, jpeg artifacts,nsfw, paintings, sketches, text, watermark, username, spikey",
         num_per_image=num_per_image,
-        lora_scale=0.7,
+        strength=1.0,
+        lora_scale=0.3,
         controlnet_scale=1.0,
-        models=model_storage["diffusion_models"],
+        models=model_storage["diffusion_models_inpaint"],
         seeds=-1,
         device="cuda",
         tokenizer=model_storage["tokenizer"]
     )
-    
-    model_storage["diffusion_models"].pop("controlnet")
-    model_storage["diffusion_models"].pop("controlnet_embedding")
+
+    model_storage["diffusion_models_inpaint"].pop("controlnet")
+    model_storage["diffusion_models_inpaint"].pop("controlnet_embedding")
 
     if return_dict == True:
         return {"image_b64_list": ["data:application/octet-stream;base64," + pil_to_bs64(cur) for cur in output_pils]}
@@ -180,10 +184,10 @@ def composition(img_pil, mask_pil, num_per_image, return_dict=False):
         input_image=img_pil,
         mask_image=mask_pil,
         control_image=control_pil,
-        prompt=f"professional photography, natural shadow, {caption}, realistic, high resolution, 8k",
+        prompt=f"professional photography, natural, {caption}, realistic, high resolution, 8k",
         uncond_prompt="low quality, worst quality, wrinkled, deformed, distorted, jpeg artifacts,nsfw, paintings, sketches, text, watermark, username, spikey",
         num_per_image=num_per_image,
-        strength=0.6,
+        strength=0.9,
         lora_scale=0.7,
         controlnet_scale=1.0,
         models=model_storage["diffusion_models_inpaint"],
@@ -203,24 +207,26 @@ def composition(img_pil, mask_pil, num_per_image, return_dict=False):
 def augmentation_base_style(img_base_pil, img_style_pil, num_per_image, return_dict=False):
     torch.cuda.empty_cache()
     img_base_pil = resize_store_ratio(img_base_pil)
-    img_style_pil = resize_store_ratio(img_style_pil)
+    img_style_pil = center_crop_and_resize(img_style_pil, target_size=img_base_pil.size)
     control_canny_pil = make_canny_condition(img_base_pil)
     control_shuffle_pil = make_shuffle_condition(img_style_pil)
     caption = text_to_image_blip(img_base_pil)
 
     multi_control_model = make_multi_controlnet_model(
-        [model_storage["controlnet_shuffle"], model_storage["controlnet_canny"]]
+        [model_storage["controlnet_canny"], model_storage["controlnet_shuffle"]]
     )
     model_storage["diffusion_models"].update(multi_control_model)
 
-    output_pils = text_to_image_controlnet(
-        control_image=[control_shuffle_pil, control_canny_pil],
-        prompt=f"professional photography, natural shadow, {caption}, realistic, high resolution, 8k",
+    output_pils = text_to_image_positive_controlnet(
+        control_image=control_canny_pil,
+        positive_control_image=control_shuffle_pil,
+        prompt=f"professional photography, natural, {caption}, realistic, high resolution, 8k",
         uncond_prompt="low quality, worst quality, wrinkled, deformed, distorted, jpeg artifacts,nsfw, paintings, sketches, text, watermark, username, spikey",
         num_per_image=num_per_image,
         lora_scale=0.7,
+        controlnet_scale=[1.0,0.4],
         models=model_storage["diffusion_models"],
-        seeds=-1,
+        seeds=[42],
         device="cuda",
         tokenizer=model_storage["tokenizer"]
     )

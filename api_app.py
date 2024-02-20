@@ -11,7 +11,7 @@ import atexit
 from model_api import *
 from utils import TooMuchRequestQueueError, DupledRequestKeyError, RequestKeyDoesNotExistError
 
-app = Flask(__name__)
+# app = Flask(__name__)
 request_queue = Queue()
 response_dict = {}
 lock = threading.Lock()

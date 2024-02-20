@@ -4,6 +4,7 @@ import threading
 import atexit
 
 from model_api import *
+from utils import TooMuchRequestQueueError, DupledRequestKeyError, RequestKeyDoesNotExistError
 
 app = Flask(__name__)
 request_queue = Queue()
@@ -14,7 +15,6 @@ def enqueue_request(data):
     with lock:
         request_queue.put(data)
 
-from utils import TooMuchRequestQueueError
 request_queue_max_len = None
 def check_request_queue_length(max_len=None):
     if max_len is None:
@@ -26,7 +26,7 @@ response_dict_max_len = None
 def cleanup_response_dict(max_len=None):
     if max_len is None:
         max_len = response_dict_max_len
-    if len(response_dict) > max_len:
+    if len([True for cur in response_dict if response_dict[cur] is not None]) > max_len:
         print(f"WARNINIG: Response dict length is over max_len({max_len}), response dict will be cleaned up!")
         with lock:
             response_dict.clear()
@@ -44,9 +44,9 @@ def queue_process():
             result = process_function(**data.get("params"))
             result["request_id"] = request_id
         except Exception as e:
-            result = {"state": "error"+str(e)}
+            result = {"state": "error " + str(e)}
         
-        cleanup_response_dict()
+        cleanup_response_dict(max_len=response_dict_max_len)
 
         with lock:
             response_dict[data.get("request_id")] = result
@@ -77,11 +77,14 @@ def get_result():
         data = request.get_json()
         args = load_instance_from_json(data)
         result_data = response_dict.get(args["request_id"])
+        
+        if result_data is None: raise RequestKeyDoesNotExistError("request id dose not exist")
+
         response_dict.pop(args["request_id"])
 
         return respond(result_data.get("error"), result_data)
-    except KeyError:
-        return respond("Request ID Error", {"state":"request id dose not exist", "request_qsize":request_queue.qsize(), "response_dict_size":len(response_dict)})
+    except Exception as e:
+        return respond(e, {"state": "error " + str(e), "request_qsize":request_queue.qsize(), "response_dict_size":len([True for cur in response_dict if response_dict[cur] is not None])})
 
 
 @app.route('/utils/remove_bg/', methods=["POST"])
@@ -98,7 +101,7 @@ def remove_bg_api():
                                 box=args.get("box",None),
                                 return_dict=True)
     except Exception as e:
-        return respond(e, {"state": "error"+str(e)})
+        return respond(e, {"state": "error " + str(e), "request_qsize":request_queue.qsize(), "response_dict_size":len([True for cur in response_dict if response_dict[cur] is not None])})
     return respond(None, result_json)
 
 
@@ -114,7 +117,7 @@ def mask_post_process_api():
         result_dict = mask_post_process(mask_pil=mask_pil, 
                                         return_dict=True)
     except Exception as e:
-        return respond(e, {"state": "error"+str(e)})
+        return respond(e, {"state": "error " + str(e), "request_qsize":request_queue.qsize(), "response_dict_size":len([True for cur in response_dict if response_dict[cur] is not None])})
     return respond(None, result_dict)
 
 
@@ -137,7 +140,7 @@ def recommend_colors_api():
                                     mask_pil=mask_pil,
                                     return_dict=True)
     except Exception as e:
-        return respond(e, {"state": "error"+str(e)})
+        return respond(e, {"state": "error " + str(e), "request_qsize":request_queue.qsize(), "response_dict_size":len([True for cur in response_dict if response_dict[cur] is not None])})
     return respond(None, result_dict)
 
 
@@ -165,7 +168,7 @@ def color_enhancement_api():
                                         factor=factor,
                                         return_dict=True)
     except Exception as e:
-        return respond(e, {"state": "error"+str(e)})
+        return respond(e, {"state": "error " + str(e), "request_qsize":request_queue.qsize(), "response_dict_size":len([True for cur in response_dict if response_dict[cur] is not None])})
     return respond(None, result_dict)
 
 
@@ -181,7 +184,7 @@ def text_to_image_blip_api():
         result_dict = text_to_image_blip(img_pil=img_pil,
                                         return_dict=True)
     except Exception as e:
-        return respond(e, {"state": "error"+str(e)})
+        return respond(e, {"state": "error " + str(e), "request_qsize":request_queue.qsize(), "response_dict_size":len([True for cur in response_dict if response_dict[cur] is not None])})
     return respond(None, result_dict)
 
 
@@ -197,7 +200,7 @@ def text_to_image_clip_api():
         result_dict = text_to_image_clip(img_pil=img_pil,
                                         return_dict=True)
     except Exception as e:
-        return respond(e, {"state": "error"+str(e)})
+        return respond(e, {"state": "error " + str(e), "request_qsize":request_queue.qsize(), "response_dict_size":len([True for cur in response_dict if response_dict[cur] is not None])})
     return respond(None, result_dict)
 
 
@@ -212,8 +215,11 @@ def super_resolution_api():
         request_id = args["request_id"]
 
         if request_id in response_dict.keys():
-            return respond("dupled request id", {"state":"dupled request id", "type":"super_resolution", "request_qsize":request_queue.qsize()})
-        
+            raise DupledRequestKeyError("dupled request id")
+        else:
+            with lock:
+                response_dict[request_id] = None
+
         img_bs64 = args["image_b64"]
         img_pil = bs64_to_pil(img_bs64)
         
@@ -224,8 +230,8 @@ def super_resolution_api():
                             "return_dict":True,
                             }})
     except Exception as e:
-        return respond(e, {"state": "error"+str(e)})
-    return respond(None, {"state":"queued", "type":"super_resolution", "request_qsize":request_queue.qsize()})
+        return respond(e, {"state": "error " + str(e), "type":"super_resolution", "request_qsize":request_queue.qsize(), "response_dict_size":len([True for cur in response_dict if response_dict[cur] is not None])})
+    return respond(None, {"state":"queued", "type":"super_resolution", "request_qsize":request_queue.qsize(), "response_dict_size":len([True for cur in response_dict if response_dict[cur] is not None])})
 
     
 @app.route('/diffusion/outpaint/', methods=["POST"])
@@ -239,7 +245,10 @@ def outpaint_api():
         request_id = args["request_id"]
 
         if request_id in response_dict.keys():
-            return respond("dupled request id", {"state":"dupled request id", "type":"outpaint", "request_qsize":request_queue.qsize()})
+            raise DupledRequestKeyError("dupled request id")
+        else:
+            with lock:
+                response_dict[request_id] = None
         
         img_bs64 = args["image_b64"]
         img_pil = bs64_to_pil(img_bs64)
@@ -256,8 +265,8 @@ def outpaint_api():
                             "return_dict":True,
                             }})
     except Exception as e:
-        return respond(e, {"state": "error"+str(e)})
-    return respond(None, {"state":"queued", "type":"outpaint", "request_qsize":request_queue.qsize()})
+        return respond(e, {"state": "error " + str(e), "type":"outpaint", "request_qsize":request_queue.qsize(), "response_dict_size":len([True for cur in response_dict if response_dict[cur] is not None])})
+    return respond(None, {"state":"queued", "type":"outpaint", "request_qsize":request_queue.qsize(), "response_dict_size":len([True for cur in response_dict if response_dict[cur] is not None])})
 
 
 @app.route('/diffusion/composition/', methods=["POST"])
@@ -271,7 +280,10 @@ def composition_api():
         request_id = args["request_id"]
 
         if request_id in response_dict.keys():
-            return respond("dupled request id", {"state":"dupled request id", "type":"composition", "request_qsize":request_queue.qsize()})
+            raise DupledRequestKeyError("dupled request id")
+        else:
+            with lock:
+                response_dict[request_id] = None
         
         img_bs64 = args["image_b64"]
         img_pil = bs64_to_pil(img_bs64)
@@ -288,8 +300,8 @@ def composition_api():
                             "return_dict":True,
                             }})
     except Exception as e:
-        return respond(e, {"state": "error"+str(e)})
-    return respond(None, {"state":"queued", "type":"composition", "request_qsize":request_queue.qsize()})
+        return respond(e, {"state": "error " + str(e), "type":"composition", "request_qsize":request_queue.qsize(), "response_dict_size":len([True for cur in response_dict if response_dict[cur] is not None])})
+    return respond(None, {"state":"queued", "type":"composition", "request_qsize":request_queue.qsize(), "response_dict_size":len([True for cur in response_dict if response_dict[cur] is not None])})
 
     
 @app.route('/diffusion/augmentation/style/', methods=["POST"])
@@ -301,9 +313,12 @@ def augmentation_base_style_api():
         args = load_instance_from_json(data)
 
         request_id = args["request_id"]
-
+        
         if request_id in response_dict.keys():
-            return respond("dupled request id", {"state":"dupled request id", "type":"augmentation_style", "request_qsize":request_queue.qsize()})
+            raise DupledRequestKeyError("dupled request id")
+        else:
+            with lock:
+                response_dict[request_id] = None
         
         img_base_bs64 = args["image_b64_base"]
         img_base_pil = bs64_to_pil(img_base_bs64)
@@ -320,8 +335,8 @@ def augmentation_base_style_api():
                             "return_dict":True,
                             }})
     except Exception as e:
-        return respond(e, {"state": "error"+str(e)})
-    return respond(None, {"state":"queued", "type":"augmentation_style", "request_qsize":request_queue.qsize()})
+        return respond(e, {"state": "error " + str(e), "type":"augmentation_style", "request_qsize":request_queue.qsize(), "response_dict_size":len([True for cur in response_dict if response_dict[cur] is not None])})
+    return respond(None, {"state":"queued", "type":"augmentation_style", "request_qsize":request_queue.qsize(), "response_dict_size":len([True for cur in response_dict if response_dict[cur] is not None])})
 
 
 @app.route('/diffusion/augmentation/text/', methods=["POST"])
@@ -335,7 +350,10 @@ def augmentation_base_text_api():
         request_id = args["request_id"]
 
         if request_id in response_dict.keys():
-            return respond("dupled request id", {"state":"dupled request id", "type":"augmentation_text", "request_qsize":request_queue.qsize()})
+            raise DupledRequestKeyError("dupled request id")
+        else:
+            with lock:
+                response_dict[request_id] = None
         
         img_bs64 = args["image_b64"]
         img_pil = bs64_to_pil(img_bs64)
@@ -353,8 +371,8 @@ def augmentation_base_text_api():
                             "return_dict":True,
                             }})
     except Exception as e:
-        return respond(e, {"state": "error"+str(e)})
-    return respond(None, {"state":"queued", "type":"augmentation_text", "request_qsize":request_queue.qsize()})
+        return respond(e, {"state": "error " + str(e), "type":"augmentation_text", "request_qsize":request_queue.qsize(), "response_dict_size":len([True for cur in response_dict if response_dict[cur] is not None])})
+    return respond(None, {"state":"queued", "type":"augmentation_text", "request_qsize":request_queue.qsize(), "response_dict_size":len([True for cur in response_dict if response_dict[cur] is not None])})
 
 
 import argparse

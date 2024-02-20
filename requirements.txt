@@ -11,3 +11,4 @@ clip-interrogator==0.6.0
 Flask==3.0.2
 kornia==0.6.7
 fairscale==0.4.4
+flask-cors==4.0.0

@@ -142,14 +142,14 @@ def outpaint(img_pil, mask_pil, num_per_image, text="", return_dict=False):
     img_pil = resize_store_ratio(img_pil)
     mask_pil = resize_store_ratio(mask_pil)
     control_pil = make_outpaint_condition(img_pil, mask_pil)
-    init_pil = composing_output(make_background(img_pil.size, color_rgb=[255,0,0], noise=0.1), img_pil, mask_pil)
+    # init_pil = composing_output(make_background(img_pil.size, color_rgb=[255,0,0], noise=0.1), img_pil, mask_pil)
     reversed_mask_pil = Image.fromarray(255 - np.array(mask_pil))
     caption = text_to_image_clip(control_pil, mode="simple", remove_color=True)
     
     model_storage["diffusion_models_inpaint"].update(model_storage["controlnet_outpaint"])
 
     output_pils = inpainting_controlnet(
-        input_image=init_pil,
+        input_image=img_pil,
         mask_image=reversed_mask_pil,
         control_image=control_pil,
         prompt=f"product photo, official product, {text}, {caption}, award winning, high resolution, 8k",

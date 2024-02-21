@@ -112,11 +112,11 @@ def text_to_image_blip(img_pil, return_dict=False):
     else:
         return caption
 
-def text_to_image_clip(img_pil, return_dict=False):
+def text_to_image_clip(img_pil, return_dict=False, mode="fast", remove_color=False):
     torch.cuda.empty_cache()
     model = model_storage["clip"].to("cuda")
 
-    caption = inference_clip(img_pil, model)
+    caption = inference_clip(img_pil, model, mode=mode, remove_color=remove_color)
     model_storage["clip"] = model.to("cpu")
     
     if return_dict == True:
@@ -143,7 +143,7 @@ def outpaint(img_pil, mask_pil, num_per_image, return_dict=False):
     mask_pil = resize_store_ratio(mask_pil)
     control_pil = make_outpaint_condition(img_pil, mask_pil)
     reversed_mask_pil = Image.fromarray(255 - np.array(mask_pil))
-    caption = text_to_image_blip(img_pil)
+    caption = text_to_image_clip(control_pil, mode="simple", remove_color=True)
     
     model_storage["diffusion_models_inpaint"].update(model_storage["controlnet_outpaint"])
 
@@ -210,7 +210,7 @@ def augmentation_base_style(img_base_pil, img_style_pil, num_per_image, return_d
     img_style_pil = center_crop_and_resize(img_style_pil, target_size=img_base_pil.size)
     control_canny_pil = make_canny_condition(img_base_pil)
     control_shuffle_pil = make_shuffle_condition(img_style_pil)
-    caption = text_to_image_blip(img_base_pil)
+    caption = text_to_image_clip(img_base_pil, mode="simple", remove_color=True)
 
     multi_control_model = make_multi_controlnet_model(
         [model_storage["controlnet_canny"], model_storage["controlnet_shuffle"]]

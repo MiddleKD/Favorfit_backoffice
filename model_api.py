@@ -137,7 +137,7 @@ def super_resolution(img_pil, return_dict=False):
         return image_pil
 
 
-def outpaint(img_pil, mask_pil, num_per_image, return_dict=False):
+def outpaint(img_pil, mask_pil, num_per_image, text="", return_dict=False):
     torch.cuda.empty_cache()
     img_pil = resize_store_ratio(img_pil)
     mask_pil = resize_store_ratio(mask_pil)
@@ -151,7 +151,7 @@ def outpaint(img_pil, mask_pil, num_per_image, return_dict=False):
         input_image=img_pil,
         mask_image=reversed_mask_pil,
         control_image=control_pil,
-        prompt=f"product photo, official product, {caption}, award winning, high resolution, 8k",
+        prompt=f"product photo, official product, {text}, {caption}, award winning, high resolution, 8k",
         uncond_prompt="low quality, worst quality, wrinkled, deformed, distorted, jpeg artifacts,nsfw, paintings, sketches, text, watermark, username, spikey",
         num_per_image=num_per_image,
         strength=1.0,

@@ -267,6 +267,7 @@ def outpaint_api():
                             "img_pil":img_pil,
                             "mask_pil":mask_pil,
                             "num_per_image":args.get("num_per_image", 1),
+                            "text":args.get("text", ""),
                             "return_dict":True,
                             }})
     except Exception as e:

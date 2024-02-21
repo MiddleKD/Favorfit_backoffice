@@ -226,7 +226,7 @@ def augmentation_base_style(img_base_pil, img_style_pil, num_per_image, return_d
         lora_scale=0.7,
         controlnet_scale=[1.0,0.4],
         models=model_storage["diffusion_models"],
-        seeds=[42],
+        seeds=-1,
         device="cuda",
         tokenizer=model_storage["tokenizer"]
     )

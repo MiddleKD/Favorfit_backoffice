@@ -151,9 +151,3 @@ def resize_store_ratio(image, min_side=512):
     resized_image = image.resize((new_width, new_height))
 
     return resized_image
-
-def create_init_noise(image_size):
-    w, h = image_size
-    image_array = np.random.rand(h, w, 3) * 255
-    image = Image.fromarray(image_array.astype("uint8")).convert("RGB")
-    return image

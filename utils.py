@@ -151,3 +151,16 @@ def resize_store_ratio(image, min_side=512):
     resized_image = image.resize((new_width, new_height))
 
     return resized_image
+
+def make_background(image_size, color_rgb=[255,255,255], noise=0.1):
+    w, h = image_size
+    image_array = np.zeros((h, w, 3), dtype=np.uint8)
+    image_array[:, :] = color_rgb
+
+    # Add noise to the image
+    noise_pixels = np.random.randint(0, 256, (h, w, 3))
+    image_array = (1 - noise) * image_array + noise * noise_pixels
+    image_array = np.clip(image_array, 0, 255).astype(np.uint8)
+
+    image = Image.fromarray(image_array, 'RGB')
+    return image

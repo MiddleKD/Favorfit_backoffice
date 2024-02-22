@@ -1,5 +1,5 @@
 from Favorfit_diffusion.inference import call_tokenizer, call_diffusion_model, call_controlnet_model, make_multi_controlnet_model,\
-    text_to_image_controlnet, inpainting_controlnet, text_to_image_positive_controlnet
+    text_to_image_controlnet, inpainting_controlnet, inpainting_positive_controlnet, text_to_image_positive_controlnet
 from Favorfit_remove_bg.inference import call_model as model_remove_bg, inference as inference_remove_bg
 from Favorfit_recommend_template.inference import inference as inference_recommend_color
 from Favorfit_image_to_text.blip_image_to_text import load_interrogator as model_blip, inference as inference_blip
@@ -46,7 +46,6 @@ def prepare_ai_models():
     model_storage["controlnet_shuffle"] = call_controlnet_model(os.path.join(root_model_diffusion_dir, "controlnet/shuffle.pth"), apply_global_mean_pooling_per_models=True)
     model_storage["controlnet_canny"] = call_controlnet_model(os.path.join(root_model_diffusion_dir, "controlnet/canny.pth"))
     model_storage["controlnet_outpaint"] = call_controlnet_model(os.path.join(root_model_diffusion_dir, "controlnet/outpaint_v2.pth"))
-    # model_storage["controlnet_depth"] = call_controlnet_model(os.path.join(root_model_diffusion_dir, "controlnet/depth.pth"))
 
     model_storage["remove_bg"] = model_remove_bg(os.path.join(root_model_dir, "remove_bg/remove_bg.pth"), device="cpu")
     model_storage["blip"] = model_blip(os.path.join(root_model_dir, "image_to_text/blip/blip_large.pth"), device="cuda")
@@ -64,13 +63,13 @@ def remove_bg(img_pil, post_process=True, box=None, return_dict=False):
     
     model = model_storage["remove_bg"].to("cpu")
     mask_pil = inference_remove_bg(img_pil_cropped, model)
-    # model_storage["remove_bg"] = model.to("cpu")
 
     if post_process == True:
         mask_pil = mask_post_process(mask_pil)
     if box is not None:
         mask_pil = padding_mask_img(img_pil=img_pil, mask_pil=mask_pil, box=box)
-    
+    torch.cuda.empty_cache()
+
     if return_dict == True:
         return {"type":"remove_bg", "image_b64": "data:application/octet-stream;base64," + pil_to_bs64(mask_pil)}
     else:
@@ -106,6 +105,7 @@ def text_to_image_blip(img_pil, return_dict=False):
 
     caption = inference_blip(img_pil, model)
     model_storage["blip"] = model.to("cpu")
+    torch.cuda.empty_cache()
 
     if return_dict == True:
         return {"type":"blip", "caption": caption}
@@ -118,7 +118,8 @@ def text_to_image_clip(img_pil, return_dict=False, mode="fast", remove_color=Fal
 
     caption = inference_clip(img_pil, model, mode=mode, remove_color=remove_color)
     model_storage["clip"] = model.to("cpu")
-    
+    torch.cuda.empty_cache()
+
     if return_dict == True:
         return {"type":"clip", "caption": caption}
     else:
@@ -130,22 +131,52 @@ def super_resolution(img_pil, return_dict=False):
 
     image_pil = inference_super_resolution(img_pil, model)
     model_storage["super_resolution"] = model.to("cpu")
-    
+    torch.cuda.empty_cache()
+
     if return_dict == True:
         return {"type":"super_resolution", "image_b64": "data:application/octet-stream;base64," + pil_to_bs64(image_pil)}
     else:
         return image_pil
-
 
 def outpaint(img_pil, mask_pil, num_per_image, text="", return_dict=False):
     torch.cuda.empty_cache()
     img_pil = resize_store_ratio(img_pil)
     mask_pil = resize_store_ratio(mask_pil)
     control_pil = make_outpaint_condition(img_pil, mask_pil)
-    # init_pil = composing_output(make_background(img_pil.size, color_rgb=[255,0,0], noise=0.1), img_pil, mask_pil)
+    caption = text_to_image_clip(control_pil, mode="fast")
+    model_storage["diffusion_models"].update(model_storage["controlnet_outpaint"])
+
+    output_pils = text_to_image_controlnet(
+        control_image=control_pil,
+        prompt=f"product photo, official product, {text}, {caption}, award winning, high resolution, 8k",
+        uncond_prompt="low quality, worst quality, wrinkled, deformed, distorted, jpeg artifacts,nsfw, paintings, sketches, text, watermark, username, spikey",
+        num_per_image=num_per_image,
+        cfg_scale=5.5,
+        strength=1.0,
+        lora_scale=0.3,
+        controlnet_scale=1.0,
+        models=model_storage["diffusion_models"],
+        seeds=-1,
+        device="cuda",
+        tokenizer=model_storage["tokenizer"]
+    )
+
+    model_storage["diffusion_models"].pop("controlnet")
+    model_storage["diffusion_models"].pop("controlnet_embedding")
+    torch.cuda.empty_cache()
+
+    if return_dict == True:
+        return {"image_b64_list": ["data:application/octet-stream;base64," + pil_to_bs64(cur) for cur in output_pils]}
+    else:
+        return output_pils
+
+def outpaint_inpainting(img_pil, mask_pil, num_per_image, text="", strength=0.7, return_dict=False):
+    torch.cuda.empty_cache()
+    img_pil = resize_store_ratio(img_pil)
+    mask_pil = resize_store_ratio(mask_pil)
+    control_pil = make_outpaint_condition(img_pil, mask_pil)
     reversed_mask_pil = Image.fromarray(255 - np.array(mask_pil))
-    caption = text_to_image_clip(control_pil, mode="simple", remove_color=True)
-    
+    caption = text_to_image_clip(control_pil, mode="fast")
     model_storage["diffusion_models_inpaint"].update(model_storage["controlnet_outpaint"])
 
     output_pils = inpainting_controlnet(
@@ -155,7 +186,8 @@ def outpaint(img_pil, mask_pil, num_per_image, text="", return_dict=False):
         prompt=f"product photo, official product, {text}, {caption}, award winning, high resolution, 8k",
         uncond_prompt="low quality, worst quality, wrinkled, deformed, distorted, jpeg artifacts,nsfw, paintings, sketches, text, watermark, username, spikey",
         num_per_image=num_per_image,
-        strength=1.0,
+        cfg_scale=10.5,
+        strength=strength,
         lora_scale=0.3,
         controlnet_scale=1.0,
         models=model_storage["diffusion_models_inpaint"],
@@ -166,6 +198,48 @@ def outpaint(img_pil, mask_pil, num_per_image, text="", return_dict=False):
 
     model_storage["diffusion_models_inpaint"].pop("controlnet")
     model_storage["diffusion_models_inpaint"].pop("controlnet_embedding")
+    torch.cuda.empty_cache()
+
+    if return_dict == True:
+        return {"image_b64_list": ["data:application/octet-stream;base64," + pil_to_bs64(cur) for cur in output_pils]}
+    else:
+        return output_pils
+
+def outpaint_inpainting_style(img_pil, mask_pil, style_pil, num_per_image, text="", return_dict=False):
+    torch.cuda.empty_cache()
+    img_pil = resize_store_ratio(img_pil)
+    mask_pil = resize_store_ratio(mask_pil)
+    control_pil = make_outpaint_condition(img_pil, mask_pil)
+    style_pil = make_shuffle_condition(center_crop_and_resize(style_pil, target_size=img_pil.size))
+    reversed_mask_pil = Image.fromarray(255 - np.array(mask_pil))
+    caption = text_to_image_clip(control_pil, mode="fast")
+    
+    multi_control_model = make_multi_controlnet_model(
+        [model_storage["controlnet_outpaint"], model_storage["controlnet_shuffle"]]
+    )
+    model_storage["diffusion_models_inpaint"].update(multi_control_model)
+
+    output_pils = inpainting_positive_controlnet(
+        input_image=img_pil,
+        mask_image=reversed_mask_pil,
+        control_image=control_pil,
+        positive_control_image=style_pil,
+        prompt=f"product photo, official product, {text}, {caption}, award winning, high resolution, 8k",
+        uncond_prompt="low quality, worst quality, wrinkled, deformed, distorted, jpeg artifacts,nsfw, paintings, sketches, text, watermark, username, spikey",
+        num_per_image=num_per_image,
+        cfg_scale=10.5,
+        strength=1.0,
+        lora_scale=0.3,
+        controlnet_scale=[1.0, 0.4],
+        models=model_storage["diffusion_models_inpaint"],
+        seeds=-1,
+        device="cuda",
+        tokenizer=model_storage["tokenizer"]
+    )
+
+    model_storage["diffusion_models_inpaint"].pop("controlnet")
+    model_storage["diffusion_models_inpaint"].pop("controlnet_embedding")
+    torch.cuda.empty_cache()
 
     if return_dict == True:
         return {"image_b64_list": ["data:application/octet-stream;base64," + pil_to_bs64(cur) for cur in output_pils]}
@@ -188,7 +262,7 @@ def composition(img_pil, mask_pil, num_per_image, return_dict=False):
         prompt=f"product photo, official product, {caption}, award winning, high resolution, 8k",
         uncond_prompt="low quality, worst quality, wrinkled, deformed, distorted, jpeg artifacts,nsfw, paintings, sketches, text, watermark, username, spikey",
         num_per_image=num_per_image,
-        strength=0.9,
+        strength=1.0,
         lora_scale=0.7,
         controlnet_scale=1.0,
         models=model_storage["diffusion_models_inpaint"],
@@ -199,6 +273,7 @@ def composition(img_pil, mask_pil, num_per_image, return_dict=False):
 
     model_storage["diffusion_models_inpaint"].pop("controlnet")
     model_storage["diffusion_models_inpaint"].pop("controlnet_embedding")
+    torch.cuda.empty_cache()
 
     if return_dict == True:
         return {"image_b64_list": ["data:application/octet-stream;base64," + pil_to_bs64(cur) for cur in output_pils]}
@@ -234,6 +309,7 @@ def augmentation_base_style(img_base_pil, img_style_pil, num_per_image, return_d
 
     model_storage["diffusion_models"].pop("controlnet")
     model_storage["diffusion_models"].pop("controlnet_embedding")
+    torch.cuda.empty_cache()
 
     if return_dict == True:
         return {"image_b64_list": ["data:application/octet-stream;base64," + pil_to_bs64(cur) for cur in output_pils]}
@@ -249,7 +325,7 @@ def augmentation_base_text(img_pil, color, concept, num_per_image, return_dict=F
 
     output_pils = text_to_image_controlnet(
         control_image=control_pil,
-        prompt=f"{{FavorfitStyle}}, {color} theme, {concept},table, pastel color, masterpiece, best quality, no human, artwork, still life, clean, Comfortable natural light, minimalist, modernist, 8K",
+        prompt=f"{{FavorfitStyle}}, {color} theme, {concept}, table, pastel color, masterpiece, best quality, no human, artwork, still life, clean, Comfortable natural light, minimalist, modernist, 8K",
         uncond_prompt="shiny, light reflection, low quality, worst quality, deformed, distorted, jpeg artifacts, paintings, nsfw, sketches, text, watermark, username, signature, brand name, icon, spikey",
         num_per_image=num_per_image,
         lora_scale=0.7,
@@ -261,6 +337,7 @@ def augmentation_base_text(img_pil, color, concept, num_per_image, return_dict=F
 
     model_storage["diffusion_models"].pop("controlnet")
     model_storage["diffusion_models"].pop("controlnet_embedding")
+    torch.cuda.empty_cache()
 
     if return_dict == True:
         return {"image_b64_list": ["data:application/octet-stream;base64," + pil_to_bs64(cur) for cur in output_pils]}

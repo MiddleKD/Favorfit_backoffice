@@ -274,6 +274,81 @@ def outpaint_api():
         return respond(e, {"state": "error " + str(e), "type":"outpaint", "request_qsize":request_queue.qsize(), "response_dict_size":len([True for cur in response_dict if response_dict[cur] is not None])})
     return respond(None, {"state":"queued", "type":"outpaint", "request_qsize":request_queue.qsize(), "response_dict_size":len([True for cur in response_dict if response_dict[cur] is not None])})
 
+@app.route('/diffusion/outpaint/inpainting/', methods=["POST"])
+def outpaint_inpainting_api():
+    try:
+        check_request_queue_length()
+
+        data = request.get_json()
+        args = load_instance_from_json(data)
+
+        request_id = args["request_id"]
+
+        if request_id in response_dict.keys():
+            raise DupledRequestKeyError("dupled request id")
+        else:
+            with lock:
+                response_dict[request_id] = None
+        
+        img_bs64 = args["image_b64"]
+        img_pil = bs64_to_pil(img_bs64)
+
+        mask_bs64 = args["mask_b64"]
+        mask_pil = bs64_to_pil(mask_bs64)
+
+        enqueue_request({"process_function":outpaint_inpainting, 
+                        "request_id":request_id,
+                        "params":{
+                            "img_pil":img_pil,
+                            "mask_pil":mask_pil,
+                            "num_per_image":args.get("num_per_image", 1),
+                            "text":args.get("text", ""),
+                            "strength":args.get("rate_of_change",0.7),
+                            "return_dict":True,
+                            }})
+    except Exception as e:
+        return respond(e, {"state": "error " + str(e), "type":"outpaint inpainting", "request_qsize":request_queue.qsize(), "response_dict_size":len([True for cur in response_dict if response_dict[cur] is not None])})
+    return respond(None, {"state":"queued", "type":"outpaint inpainting", "request_qsize":request_queue.qsize(), "response_dict_size":len([True for cur in response_dict if response_dict[cur] is not None])})
+
+@app.route('/diffusion/outpaint/inpainting_style/', methods=["POST"])
+def outpaint_inpainting_style_api():
+    try:
+        check_request_queue_length()
+
+        data = request.get_json()
+        args = load_instance_from_json(data)
+
+        request_id = args["request_id"]
+
+        if request_id in response_dict.keys():
+            raise DupledRequestKeyError("dupled request id")
+        else:
+            with lock:
+                response_dict[request_id] = None
+        
+        img_bs64 = args["image_b64"]
+        img_pil = bs64_to_pil(img_bs64)
+
+        mask_bs64 = args["mask_b64"]
+        mask_pil = bs64_to_pil(mask_bs64)
+
+        style_bs64 = args["style_b64"]
+        style_pil = bs64_to_pil(style_bs64)
+
+        enqueue_request({"process_function":outpaint_inpainting_style, 
+                        "request_id":request_id,
+                        "params":{
+                            "img_pil":img_pil,
+                            "mask_pil":mask_pil,
+                            "style_pil":style_pil,
+                            "num_per_image":args.get("num_per_image", 1),
+                            "text":args.get("text",""),
+                            "return_dict":True,
+                            }})
+    except Exception as e:
+        return respond(e, {"state": "error " + str(e), "type":"outpaint inpainting style", "request_qsize":request_queue.qsize(), "response_dict_size":len([True for cur in response_dict if response_dict[cur] is not None])})
+    return respond(None, {"state":"queued", "type":"outpaint inpainting style", "request_qsize":request_queue.qsize(), "response_dict_size":len([True for cur in response_dict if response_dict[cur] is not None])})
+
 
 @app.route('/diffusion/composition/', methods=["POST"])
 def composition_api():

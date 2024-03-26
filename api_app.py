@@ -378,6 +378,7 @@ def composition_api():
                             "img_pil":img_pil,
                             "mask_pil":mask_pil,
                             "num_per_image":args.get("num_per_image", 1),
+                            "strength":args.get("rate_of_change", 0.8),
                             "return_dict":True,
                             }})
     except Exception as e:

@@ -246,7 +246,7 @@ def outpaint_inpainting_style(img_pil, mask_pil, style_pil, num_per_image, text=
     else:
         return output_pils
 
-def composition(img_pil, mask_pil, num_per_image, return_dict=False):
+def composition(img_pil, mask_pil, num_per_image, strength=0.8, return_dict=False):
     torch.cuda.empty_cache()
     img_pil = resize_store_ratio(img_pil)
     mask_pil = resize_store_ratio(mask_pil)
@@ -262,7 +262,7 @@ def composition(img_pil, mask_pil, num_per_image, return_dict=False):
         prompt=f"product photo, official product, {caption}, award winning, high resolution, 8k",
         uncond_prompt="low quality, worst quality, wrinkled, deformed, distorted, jpeg artifacts,nsfw, paintings, sketches, text, watermark, username, spikey",
         num_per_image=num_per_image,
-        strength=1.0,
+        strength=strength,
         lora_scale=0.7,
         controlnet_scale=1.0,
         models=model_storage["diffusion_models_inpaint"],
